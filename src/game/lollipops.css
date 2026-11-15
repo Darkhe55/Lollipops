@@ -1,0 +1,132 @@
+/* ════════════════════════════════════════════════════════════════
+   棒棒糖（Lollipops）—— 游戏样式
+   糖果色板：圆头黑白 + 橙糖棍，棋盘米白，错误砖红。
+   ════════════════════════════════════════════════════════════════ */
+
+.lp-board {
+  --lp-ink: #2a2722;
+  --lp-candy: #e0954a;
+  --lp-candy-soft: #f7e3c6;
+  --lp-grid: #e4d9c6;
+  --lp-given: #fbf0dd;
+  --lp-error: #c23b2e;
+}
+
+/* —— 棋盘 —— */
+.lp-board .lp-board-bg {
+  fill: #fffdf8;
+  stroke: #e7ddca;
+  stroke-width: 1.5;
+}
+
+.lp-board .lp-grid-line {
+  stroke: var(--lp-grid);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* —— 预填格 —— */
+.lp-board .lp-given-tint {
+  fill: var(--lp-given);
+  pointer-events: none;
+}
+
+.lp-board .lp-given-dot {
+  fill: #c45c26;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+/* —— 棒棒糖底衬（把一对格子连起来，糖果棍的暖色） —— */
+.lp-board .lp-candy {
+  stroke: var(--lp-candy-soft);
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+/* —— 圆头 —— */
+.lp-board .lp-head-black {
+  fill: var(--lp-ink);
+}
+
+.lp-board .lp-head-white {
+  fill: #fff;
+  stroke: var(--lp-ink);
+}
+
+.lp-board .lp-head-shine {
+  fill: #fff;
+  opacity: 0.32;
+  pointer-events: none;
+}
+
+/* —— 棍子 —— */
+.lp-board .lp-stick {
+  fill: #c4702c;
+}
+
+/* —— 错误 —— */
+.lp-board .lp-bad {
+  fill: rgba(194, 59, 46, 0.14);
+  stroke: var(--lp-error);
+  stroke-width: 2.2;
+  stroke-dasharray: 5 3;
+  pointer-events: none;
+}
+
+.lp-board .lp-sight {
+  stroke: var(--lp-error);
+  stroke-dasharray: 4 5;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.lp-board .lp-sight-soft {
+  stroke: #d99a4e;
+  stroke-dasharray: 2 7;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.lp-board .lp-cell.bad .lp-head-black,
+.lp-board .lp-cell.bad .lp-stick {
+  fill: #8e2f24;
+}
+
+.lp-board .lp-cell.bad .lp-head-white {
+  stroke: #8e2f24;
+}
+
+/* —— 键盘光标 —— */
+.lp-board .lp-cursor {
+  fill: none;
+  stroke: #1f6f5c;
+  stroke-dasharray: 6 4;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* —— 自定义题板：符号预览 —— */
+.custom-cell.lp-v1 {
+  background: #2a2722;
+  color: #fffdf8;
+}
+
+.custom-cell.lp-v2 {
+  background: #fff;
+  color: #2a2722;
+  border-color: #2a2722;
+  border-width: 2px;
+}
+
+.custom-cell.lp-v3,
+.custom-cell.lp-v4 {
+  color: #c4702c;
+  font-size: 18px;
+}
+
+.custom-cell.lp-v3.empty,
+.custom-cell.lp-v4.empty {
+  color: transparent;
+}
+
