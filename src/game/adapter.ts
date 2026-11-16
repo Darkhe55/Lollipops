@@ -57,8 +57,8 @@ const meta = {
   customIdPrefix: 'lollipops-custom-',
   customMinW: 4,
   customMinH: 4,
-  customMaxW: 20,
-  customMaxH: 20,
+  customMaxW: 40,
+  customMaxH: 40,
   targetKind: 'cell' as const,
   interactionHint:
     '<kbd>左键</kbd> 循环符号（空 → 黑圆头 → 白圆头 → 横棍 → 竖棍） · <kbd>右键</kbd> 清除 · <kbd>方向键</kbd> 移动光标 · <kbd>空格</kbd> 切换 · <kbd>1-4</kbd> 直接落子',
