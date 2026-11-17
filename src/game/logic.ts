@@ -9,6 +9,9 @@
  *
  * 计划生成后把推导事件转成回放帧：已经和推导结果一致的格子不再落子；
  * 若玩家盘面里有错误符号，会用「清除 / 改写」帧一并纠正。
+ *
+ * 推理从「当前盘面」开始：玩家已经放好的符号会作为工作盘面的已知值写进推理引擎，
+ * 未知格（盘面值 0）保持 unknown；只有玩家标记与规则矛盾时才退回只看题面的旧路径。
  */
 
 import type { GameState, LogicPlan, Move, PlaybackFrame, Puzzle } from '../core/types'
@@ -59,15 +62,33 @@ function pickProbeCell(est: EngineState): number {
   return best
 }
 
-/** 只用规则传播 + 反证推导出完整类型解；返回 null 表示推不出来 */
+/** 把当前盘面格子转成类型层种子：0 = 空/未知保持 -1，其余按符号类型写入 */
+function typesFromCurrentCells(cells: ArrayLike<number>): Int8Array {
+  const out = new Int8Array(cells.length)
+  for (let i = 0; i < cells.length; i++) {
+    const v = cells[i] ?? 0
+    out[i] = v > 0 ? typeOf(v) : -1
+  }
+  return out
+}
+
+/**
+ * 只用规则传播 + 反证推导出完整类型解；返回 null 表示推不出来。
+ *
+ * initialTypes 不为空时作为工作盘面的起点：玩家已经放好的符号（以及题面给定）
+ * 直接写入引擎，未知格保持 -1，因此推理（和回放）都是从当前盘面继续。
+ */
 export function deduceTypes(
   puzzle: Puzzle,
+  initialTypes?: ArrayLike<number> | null,
 ): { types: number[]; events: import('./engine.ts').Deduction[]; saturated: boolean } | null {
   const p = asLollipopPuzzle(puzzle)
   const size = p.width * p.height
   if (p.givens.length !== size) return null
   const geo = makeGeo(p.width, p.height)
-  const est = makeEngine(geo, typesFromGivens(p.givens), true)
+  const seed =
+    initialTypes && initialTypes.length === size ? initialTypes : typesFromGivens(p.givens)
+  const est = makeEngine(geo, seed, true)
   if (!propagate(est)) return null
 
   const unique = (() => {
@@ -123,6 +144,16 @@ export function deduceTypes(
   return { types: typesOf(est), events: est.events ?? [], saturated }
 }
 
+/** 当前盘面是否有玩家自己放的符号（题面给定格不算） */
+function hasPlayerSymbols(s: LollipopState): boolean {
+  for (let i = 0; i < s.cells.length; i++) {
+    const v = s.cells[i] ?? EMPTY
+    if (v === EMPTY) continue
+    if ((s.givens[i] ?? EMPTY) === EMPTY) return true
+  }
+  return false
+}
+
 export function planLogicSolve(puzzle: Puzzle, initialState: GameState): LogicPlan {
   const p = asLollipopPuzzle(puzzle)
   const s = asLollipopState(initialState)
@@ -134,7 +165,10 @@ export function planLogicSolve(puzzle: Puzzle, initialState: GameState): LogicPl
     saturated: false,
   }
 
-  const deduced = deduceTypes(puzzle)
+  // 推理从当前盘面开始：玩家已放的符号作为工作盘面的已知值，未知格保持 unknown
+  let deduced = deduceTypes(puzzle, typesFromCurrentCells(s.cells))
+  // 玩家标记与规则矛盾（推不出）：退回只看题面的旧路径，回放帧仍从当前盘面出发纠正
+  if (!deduced && hasPlayerSymbols(s)) deduced = deduceTypes(puzzle)
   if (!deduced) return emptyPlan
 
   const display = s.cells.slice()
