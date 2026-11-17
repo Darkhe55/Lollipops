@@ -39,7 +39,7 @@
 
 /* —— 棒棒糖底衬（把一对格子连起来，糖果棍的暖色） —— */
 .lp-board .lp-candy {
-  stroke: #d48232;
+  stroke: #c4702c;
   stroke-linecap: butt;
   opacity: 1;
   pointer-events: none;
@@ -138,4 +138,5 @@
 .custom-cell.lp-v4.empty {
   color: transparent;
 }
+
 

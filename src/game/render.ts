@@ -124,7 +124,7 @@ export function renderBoard(
     const a = centerOf(m, i)
     const b = centerOf(m, partner)
     candy.push(
-      `<line class="lp-candy" x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke-width="${(cell * 0.36).toFixed(2)}" />`,
+      `<line class="lp-candy" x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke-width="${(cell * 0.18).toFixed(2)}" />`,
     )
   }
   parts.push(`<g class="lp-candies">${candy.join('')}</g>`)
@@ -220,4 +220,5 @@ export function hitTest(
   if (col < 0 || row < 0 || col >= puzzle.width || row >= puzzle.height) return null
   return { index: row * puzzle.width + col }
 }
+
 
