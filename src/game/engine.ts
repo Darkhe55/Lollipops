@@ -12,7 +12,9 @@
  *                朝向不兼容的相邻格也必然留空；
  *   R3 视线阻挡：同一行/列里相邻（忽略空格）的两个符号类型不能相同；
  *   R6 2×2 局部：一个 2×2 最多两个符号；相邻两符号必须配对；对角两符号的另外两格必须为空；
- *      一个符号若没有任何可配对方向（圆头/横棍/竖棍的轴向都不行）→ 矛盾。
+ *      一个符号若没有任何可配对方向（圆头/横棍/竖棍的轴向都不行）→ 矛盾；
+ *   R7 行/列视线：用每格候选域做行/列 DP，同类符号之间必须隔一个不同符号；
+ *   R8 配对可行性：未配对符号到候选搭档的 Hall 必要性检查（候选不足即矛盾）。
  *
  * 求解器与逻辑解题回放共用本文件。
  */
@@ -36,6 +38,7 @@ export const RULE_SIGHT = 3
 export const RULE_PROBE = 4
 export const RULE_FALLBACK = 5
 export const RULE_LOCAL = 6
+export const RULE_LINE = 7
 
 export const RULE_LABELS: Record<number, string> = {
   1: '唯一搭档：这个符号只剩一个可配对的相邻格',
@@ -44,6 +47,7 @@ export const RULE_LABELS: Record<number, string> = {
   4: '反证：假定该格为其它符号都会导致矛盾',
   5: '回溯补完：剩下的格子由求解结果确定',
   6: '2×2 局部：相邻符号必须配对、对角符号两侧留空、三符号必矛盾',
+  7: '行/列视线：同类符号之间必须隔一个不同符号',
 }
 
 export interface Deduction {
@@ -57,6 +61,8 @@ export interface EngineState {
   geo: Geo
   /** 每格类型：-1 未知 / 0 空 / 1 圆头 / 2 横棍 / 3 竖棍 */
   val: Int8Array
+  /** 候选域位掩码：bit0 空 / bit1 圆头 / bit2 横棍 / bit3 竖棍 */
+  dom: Uint8Array
   /** 每格搭档索引；-1 表示还没有搭档 */
   partner: Int16Array
   /** 记录推导事件（求解时传 null 以加速） */
@@ -64,21 +70,39 @@ export interface EngineState {
   changed: boolean
 }
 
+export const DOM_EMPTY = 1
+export const DOM_HEAD = 2
+export const DOM_H = 4
+export const DOM_V = 8
+export const DOM_ALL = DOM_EMPTY | DOM_HEAD | DOM_H | DOM_V
+
+function domBit(type: number): number {
+  return type === T_EMPTY ? DOM_EMPTY : type === T_HEAD ? DOM_HEAD : type === T_H ? DOM_H : DOM_V
+}
+
 export function makeEngine(geo: Geo, initial: ArrayLike<number>, record: boolean): EngineState {
   const val = new Int8Array(geo.n)
+  const dom = new Uint8Array(geo.n)
   const partner = new Int16Array(geo.n)
   for (let i = 0; i < geo.n; i++) {
     const v = initial[i] ?? -1
-    val[i] = v >= 0 && v <= 3 ? v : -1
+    if (v >= 0 && v <= 3) {
+      val[i] = v
+      dom[i] = domBit(v)
+    } else {
+      val[i] = -1
+      dom[i] = DOM_ALL
+    }
     partner[i] = -1
   }
-  return { geo, val, partner, events: record ? [] : null, changed: false }
+  return { geo, val, dom, partner, events: record ? [] : null, changed: false }
 }
 
 export function cloneEngine(est: EngineState, record: boolean): EngineState {
   return {
     geo: est.geo,
     val: est.val.slice(),
+    dom: est.dom.slice(),
     partner: est.partner.slice(),
     events: record ? [] : null,
     changed: false,
@@ -95,9 +119,28 @@ export function assign(est: EngineState, index: number, type: number, rule: numb
   const cur = est.val[index]!
   if (cur === type) return true
   if (cur !== -1) return false
+  const bit = domBit(type)
+  if ((est.dom[index]! & bit) === 0) return false
   est.val[index] = type
+  est.dom[index] = bit
   est.changed = true
   emit(est, index, type, rule)
+  return true
+}
+
+/** 收缩候选域；只剩一个类型时自动落子并记录回放事件。 */
+export function restrict(est: EngineState, index: number, mask: number, rule: number): boolean {
+  const cur = est.val[index]!
+  if (cur !== -1) return (domBit(cur) & mask) !== 0
+  const next = est.dom[index]! & mask
+  if (next === 0) return false
+  if (next === est.dom[index]) return true
+  est.dom[index] = next
+  est.changed = true
+  if ((next & (next - 1)) === 0) {
+    const type = next === DOM_EMPTY ? T_EMPTY : next === DOM_HEAD ? T_HEAD : next === DOM_H ? T_H : T_V
+    return assign(est, index, type, rule)
+  }
   return true
 }
 
@@ -191,11 +234,21 @@ function passPairing(est: EngineState): boolean {
         const need = partnerTypeOf(t, dir)
         if (need < 0) {
           // 朝向不兼容：这个相邻格不能属于同一个棒棒糖，必须留空
-          if (!forceEmpty(est, j)) return false
+          if (!restrict(est, j, DOM_EMPTY, RULE_ADJ)) return false
         } else {
-          undecidedCount++
-          undecidedCand = j
-          undecidedDir = dir
+          // 与已知符号相邻的格子只能是空，或正好是这个符号需要的搭档类型
+          const allowed = DOM_EMPTY | domBit(need)
+          if (!restrict(est, j, allowed, RULE_ADJ)) return false
+          if ((est.dom[j]! & domBit(need)) === 0) continue
+          if (est.val[j]! === need) {
+            assignedCount++
+            assignedCand = j
+            assignedDir = dir
+          } else {
+            undecidedCount++
+            undecidedCand = j
+            undecidedDir = dir
+          }
         }
       }
     }
@@ -267,11 +320,114 @@ function passSight(est: EngineState): boolean {
   return true
 }
 
+function passLineSight(est: EngineState): boolean {
+  const { geo, dom } = est
+  const { w, h } = geo
+  for (let line = 0; line < 2; line++) {
+    const count = line === 0 ? h : w
+    const len = line === 0 ? w : h
+    const idx = (k: number): number => (line === 0 ? k : k * w + k === -1 ? -1 : -1)
+    void idx
+    for (let row = 0; row < count; row++) {
+      const positions: number[] = []
+      for (let k = 0; k < len; k++) positions.push(line === 0 ? row * w + k : k * w + row)
+      const n = positions.length
+      const forward = new Uint8Array(n + 1)
+      forward[0] = 1 // state 0 = 还没有符号
+      for (let pos = 0; pos < n; pos++) {
+        const d = dom[positions[pos]! ]!
+        for (let s = 0; s < 4; s++) {
+          if ((forward[pos]! & (1 << s)) === 0) continue
+          for (let type = 0; type < 4; type++) {
+            if ((d & (1 << type)) === 0) continue
+            if (type !== 0 && s !== 0 && type === s) continue
+            const ns = type === 0 ? s : type
+            forward[pos + 1]! |= 1 << ns
+          }
+        }
+      }
+      const backward = new Uint8Array(n + 1)
+      backward[n] = 0b1111
+      for (let pos = n - 1; pos >= 0; pos--) {
+        const d = dom[positions[pos]! ]!
+        for (let s = 0; s < 4; s++) {
+          for (let type = 0; type < 4; type++) {
+            if ((d & (1 << type)) === 0) continue
+            if (type !== 0 && s !== 0 && type === s) continue
+            const ns = type === 0 ? s : type
+            if ((backward[pos + 1]! & (1 << ns)) !== 0) {
+              backward[pos]! |= 1 << s
+              break
+            }
+          }
+        }
+      }
+      for (let pos = 0; pos < n; pos++) {
+        const d = dom[positions[pos]! ]!
+        let support = 0
+        for (let s = 0; s < 4; s++) {
+          if ((forward[pos]! & (1 << s)) === 0) continue
+          for (let type = 0; type < 4; type++) {
+            if ((d & (1 << type)) === 0) continue
+            if (type !== 0 && s !== 0 && type === s) continue
+            const ns = type === 0 ? s : type
+            if ((backward[pos + 1]! & (1 << ns)) !== 0) support |= 1 << type
+          }
+        }
+        if (!restrict(est, positions[pos]!, support, RULE_LINE)) return false
+      }
+    }
+  }
+  return true
+}
+
+function passHall(est: EngineState): boolean {
+  const { geo, val, dom, partner } = est
+  const symbols: number[] = []
+  for (let i = 0; i < geo.n; i++) if (val[i]! > 0 && partner[i]! < 0) symbols.push(i)
+  if (!symbols.length) return true
+  const candidates = symbols.map((i) => {
+    const out: number[] = []
+    for (const { j, dir } of geo.neighbors[i]!) {
+      const need = partnerTypeOf(val[i]!, dir)
+      if (need < 0) continue
+      if (val[j] === -1) {
+        if ((dom[j]! & (1 << need)) !== 0) out.push(j)
+      } else if (val[j]! > 0 && partner[j]! < 0 && canPair(val[i]!, val[j]!, dir)) {
+        // 已知且未配对的兼容符号也可以作为搭档（只作为必要条件放宽，不会误判）
+        out.push(j)
+      }
+    }
+    return out
+  })
+  const match = new Map<number, number>()
+  const seen = new Set<number>()
+  const dfs = (si: number): boolean => {
+    for (const j of candidates[si]!) {
+      if (seen.has(j)) continue
+      seen.add(j)
+      const prev = match.get(j)
+      if (prev === undefined || dfs(prev)) {
+        match.set(j, si)
+        return true
+      }
+    }
+    return false
+  }
+  for (let si = 0; si < symbols.length; si++) {
+    seen.clear()
+    if (!dfs(si)) return false
+  }
+  return true
+}
+
 function propagateOnce(est: EngineState): boolean {
   if (!passLocal(est)) return false
   if (!passPairing(est)) return false
   if (!passEmptyForcing(est)) return false
   if (!passSight(est)) return false
+  if (!passLineSight(est)) return false
+  if (!passHall(est)) return false
   return true
 }
 
@@ -315,5 +471,6 @@ export function typesOf(est: EngineState): number[] {
 }
 
 export { makeGeo, T_EMPTY, T_HEAD, T_H, T_V, DIR_H }
+
 
 
