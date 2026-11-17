@@ -56,13 +56,13 @@ function tryPair(est: EngineState, i: number, j: number, dir: number, iIsHead: b
   next.partner[j] = i
   for (const { j: k } of next.geo.neighbors[i]!) {
     if (k === j) continue
-    if (next.val[k]! === -1) next.val[k] = T_EMPTY
-    else if (next.val[k]! > 0) return null
+    if (next.val[k]! > 0) return null
+    if (!assign(next, k, T_EMPTY, 0)) return null
   }
   for (const { j: k } of next.geo.neighbors[j]!) {
     if (k === i) continue
-    if (next.val[k]! === -1) next.val[k] = T_EMPTY
-    else if (next.val[k]! > 0) return null
+    if (next.val[k]! > 0) return null
+    if (!assign(next, k, T_EMPTY, 0)) return null
   }
   return next
 }
