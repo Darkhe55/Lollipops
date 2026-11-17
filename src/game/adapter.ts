@@ -9,9 +9,10 @@
  *   2. 每个圆头 / 棍子都必须属于某个棒棒糖；
  *   3. 不同棒棒糖的格子不能上下左右相邻（斜角可以）；
  *   4. 同一行 / 列中，相邻（忽略空格）的两个同类符号之间必须有不同符号阻挡；
- *      圆头、横棍、竖棍是三种符号，黑圆与白圆视为同一符号。
+ *      圆头、横棍、竖棍是三种符号。
  *
- * 盘面值：0 = 空，1 = 黑圆头，2 = 白圆头，3 = 横棍，4 = 竖棍。
+ * 盘面值：0 = 空，2 = 白圆头，3 = 横棍，4 = 竖棍，5 = 红叉（玩家确认空地）。
+ * 旧版的 1 = 黑圆头 仅用于兼容旧题库，读取后统一成白圆头。
  */
 
 import { playDrop, playPluck } from '../core/audio.ts'
@@ -36,7 +37,6 @@ import {
 } from './state.ts'
 import { statusBits, validate } from './validate.ts'
 import {
-  BLACK,
   EMPTY,
   HSTICK,
   VSTICK,
@@ -52,7 +52,7 @@ const meta = {
   title: '棒棒糖',
   tagline: '圆头 + 一格棍子 · 同符号视线要阻挡 · 不同棒棒糖互不相触',
   footerNote:
-    '规则：每个棒棒糖由「1 个圆头 + 相邻 1 格的棍子」组成，横向相邻配横棍、纵向相邻配竖棍；每个圆头/棍子都必须属于某个棒棒糖；不同棒棒糖的格子不能上下左右相邻；同一行/列中忽略空格后相邻的两个同类符号（圆头 / 横棍 / 竖棍，黑白圆算同类）之间必须隔着一个不同符号。题面预填符号不能改动。',
+    '规则：每个棒棒糖由「1 个圆头 + 相邻 1 格的棍子」组成，横向相邻配横棍、纵向相邻配竖棍；每个圆头/棍子都必须属于某个棒棒糖；不同棒棒糖的格子不能上下左右相邻；同一行/列中忽略空格后相邻的两个同类符号（圆头 / 横棍 / 竖棍）之间必须隔着一个不同符号。题面预填符号不能改动；右键可标记红叉确认空地。',
   storageKeyPrefix: 'lollipops',
   customIdPrefix: 'lollipops-custom-',
   customMinW: 4,
@@ -61,11 +61,11 @@ const meta = {
   customMaxH: 40,
   targetKind: 'cell' as const,
   interactionHint:
-    '<kbd>左键</kbd> 循环符号（空 → 黑圆头 → 白圆头 → 横棍 → 竖棍） · <kbd>右键</kbd> 清除 · <kbd>方向键</kbd> 移动光标 · <kbd>空格</kbd> 切换 · <kbd>1-4</kbd> 直接落子',
+    '<kbd>左键</kbd> 循环符号（空 → 白圆头 → 横棍 → 竖棍） · <kbd>右键</kbd> 空→红叉 / 有内容→清除 · <kbd>右键拖动</kbd> 连续标叉或连续清除 · <kbd>方向键</kbd> 移动 · <kbd>1-3</kbd> 直接落子',
 }
 
 /** 自定义题板：编辑器里可填的值（null = 空格） */
-const VALUE_CYCLE: Array<number | null> = [null, BLACK, WHITE, HSTICK, VSTICK]
+const VALUE_CYCLE: Array<number | null> = [null, WHITE, HSTICK, VSTICK]
 
 function readGivens(value: unknown, size: number): number[] | null {
   if (typeof value === 'string') return decodeBoard(value, size)
@@ -87,16 +87,13 @@ const custom: CustomSupport = {
   valueCycle: VALUE_CYCLE,
 
   keyForDigit: (digit) => {
-    if (digit === 0) return null
-    if (digit === BLACK) return BLACK
-    if (digit === WHITE) return WHITE
-    if (digit === HSTICK) return HSTICK
-    if (digit === VSTICK) return VSTICK
+    if (digit === 1) return WHITE
+    if (digit === 2) return HSTICK
+    if (digit === 3) return VSTICK
     return undefined
   },
 
   cellLabel: (v) => {
-    if (v === BLACK) return '●'
     if (v === WHITE) return '○'
     if (v === HSTICK) return '━'
     if (v === VSTICK) return '┃'
@@ -104,14 +101,13 @@ const custom: CustomSupport = {
   },
 
   cellClass: (v) => {
-    if (v === BLACK) return 'lp-v1'
     if (v === WHITE) return 'lp-v2'
     if (v === HSTICK) return 'lp-v3'
     if (v === VSTICK) return 'lp-v4'
     return ''
   },
 
-  hint: '点格子循环：空 → 黑圆头 → 白圆头 → 横棍 → 竖棍；键盘 1-4 直接落子、0 清空。题面只需给出部分符号，剩下的由玩家补全。',
+  hint: '点格子循环：空 → 白圆头 → 横棍 → 竖棍；键盘 1/2/3 直接落子、0 清空。题面只需给出部分符号，剩下的由玩家补全。',
 
   toGrid: (p) => {
     const lp = asLollipopPuzzle(p)
@@ -216,4 +212,6 @@ export const adapter: GameAdapter = {
 
   custom,
   playForMove,
+  strokeMode: 'transition',
+  rightStroke: true,
 }

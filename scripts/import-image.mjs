@@ -6,7 +6,7 @@
  *                                 [--append] [--verify] [--dry]
  *                                 [--map 簇号=符号编号,...] [--budget 节点数]
  *
- * 符号编号：1=黑圆头 2=白圆头 3=横棍 4=竖棍（与 src/game/types.ts 一致）
+ * 符号编号：1/2=白圆头（兼容旧值） 3=横棍 4=竖棍（与 src/game/types.ts 一致）
  *
  * 流程：
  *   1. Playwright + Edge 打开图片到 canvas，取像素；
@@ -26,7 +26,7 @@ import { chromium } from 'playwright-core'
 import { countTypeSolutions, findTypeSolution } from '../src/game/solver.ts'
 import { encodeBoard, typesFromGivens, valuesFromTypes } from '../src/game/types.ts'
 
-const SYMBOL_NAMES = { 0: '空', 1: '黑圆头', 2: '白圆头', 3: '横棍', 4: '竖棍' }
+const SYMBOL_NAMES = { 0: '空', 1: '白圆头', 2: '白圆头', 3: '横棍', 4: '竖棍' }
 const EDGE_CANDIDATES = [
   process.env.EDGE_PATH,
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
@@ -170,8 +170,8 @@ function shapeOf(cell) {
   // 细长条 → 横棍 / 竖棍
   if (aspect >= 2.2) return { kind: 3, aspect, fill }
   if (aspect <= 0.45) return { kind: 4, aspect, fill }
-  // 近似圆/方 → 圆头；再按内部有无线条/填充区分黑/白
-  return { kind: fill >= 0.45 ? 1 : 2, aspect, fill }
+  // 近似圆/方 → 圆头（游戏只使用白圆头）
+  return { kind: 2, aspect, fill }
 }
 
 const clusters = []
@@ -212,7 +212,8 @@ for (let ry = 0; ry < h; ry++) {
 
 const mapping = clusters.map((c, k) => {
   const manual = args.maps[k]
-  const code = manual ?? c.kind
+  const raw = manual ?? c.kind
+  const code = raw === 1 ? 2 : raw
   if (manual !== undefined) console.log(`[棒棒糖识图] 簇${k} → ${SYMBOL_NAMES[code] ?? code}（人工，n=${c.count}）`)
   else console.log(`[棒棒糖识图] 簇${k} → ${SYMBOL_NAMES[code] ?? code}（自动，n=${c.count}）`)
   return code
@@ -227,8 +228,8 @@ const board = encodeBoard(givens)
 if (process.env.IMPORT_DEBUG) writeFileSync(path.resolve('scripts/.import-debug.json'), JSON.stringify({ w, h, givens }))
 const givenCount = givens.filter((v) => v !== 0).length
 console.log(`[棒棒糖识图] 线索 ${givenCount} 个，board = ${board.slice(0, 96)}${board.length > 96 ? '…' : ''}`)
-console.log('[棒棒糖识图] 盘面（. 空，● 黑圆头，○ 白圆头，─ 横棍，│ 竖棍）：')
-const glyph = { 0: '.', 1: '●', 2: '○', 3: '─', 4: '│' }
+console.log('[棒棒糖识图] 盘面（. 空，○ 白圆头，─ 横棍，│ 竖棍）：')
+const glyph = { 0: '.', 1: '○', 2: '○', 3: '─', 4: '│' }
 for (let ry = 0; ry < h; ry++) {
   console.log('  ' + givens.slice(ry * w, ry * w + w).map((v) => glyph[v]).join(' '))
 }

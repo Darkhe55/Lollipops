@@ -4,7 +4,7 @@
  * 视觉：
  *   - 淡色棋盘底 + 细网格；
  *   - 已连成的棒棒糖画一条糖果色「棒子」底衬（把一对格子连起来）；
- *   - 圆头（黑 / 白圆）/ 横棍（━）/ 竖棍（┃）；
+ *   - 白圆头 / 横棍（━）/ 竖棍（┃）/ 红叉（右键标记空地）；
  *   - 预填格左上角小圆点 + 米色底；
  *   - 错误格红色蒙层；视线冲突画红色虚线；
  *   - 键盘光标虚线框。
@@ -12,7 +12,7 @@
 
 import type { BoardMetrics, GameState, HitTarget, Puzzle, ValidationResult } from '../core/types'
 import {
-  BLACK,
+  CROSS,
   HSTICK,
   VSTICK,
   WHITE,
@@ -124,7 +124,7 @@ export function renderBoard(
     const a = centerOf(m, i)
     const b = centerOf(m, partner)
     candy.push(
-      `<line class="lp-candy" x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke-width="${(cell * 0.42).toFixed(2)}" />`,
+      `<line class="lp-candy" x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke-width="${(cell * 0.36).toFixed(2)}" />`,
     )
   }
   parts.push(`<g class="lp-candies">${candy.join('')}</g>`)
@@ -141,20 +141,11 @@ export function renderBoard(
         `<circle class="lp-given-dot" cx="${(p.x + cell - 8).toFixed(2)}" cy="${(p.y + 8).toFixed(2)}" r="${(cell * 0.055).toFixed(2)}" />`,
       )
     }
-    if (v === BLACK || v === WHITE) {
+    if (v === WHITE) {
       const rad = cell * 0.3
-      if (v === BLACK) {
-        items.push(
-          `<circle class="lp-head lp-head-black" cx="${c.x.toFixed(2)}" cy="${c.y.toFixed(2)}" r="${rad.toFixed(2)}" />`,
-        )
-        items.push(
-          `<circle class="lp-head-shine" cx="${(c.x - rad * 0.3).toFixed(2)}" cy="${(c.y - rad * 0.32).toFixed(2)}" r="${(rad * 0.28).toFixed(2)}" />`,
-        )
-      } else {
-        items.push(
-          `<circle class="lp-head lp-head-white" cx="${c.x.toFixed(2)}" cy="${c.y.toFixed(2)}" r="${rad.toFixed(2)}" stroke-width="${(cell * 0.06).toFixed(2)}" />`,
-        )
-      }
+      items.push(
+        `<circle class="lp-head lp-head-white" cx="${c.x.toFixed(2)}" cy="${c.y.toFixed(2)}" r="${rad.toFixed(2)}" stroke-width="${(cell * 0.06).toFixed(2)}" />`,
+      )
     } else if (v === HSTICK) {
       items.push(
         `<rect class="lp-stick" x="${(c.x - cell * 0.35).toFixed(2)}" y="${(c.y - cell * 0.09).toFixed(2)}" width="${(cell * 0.7).toFixed(2)}" height="${(cell * 0.18).toFixed(2)}" rx="${(cell * 0.09).toFixed(2)}" />`,
@@ -162,6 +153,14 @@ export function renderBoard(
     } else if (v === VSTICK) {
       items.push(
         `<rect class="lp-stick" x="${(c.x - cell * 0.09).toFixed(2)}" y="${(c.y - cell * 0.35).toFixed(2)}" width="${(cell * 0.18).toFixed(2)}" height="${(cell * 0.7).toFixed(2)}" rx="${(cell * 0.09).toFixed(2)}" />`,
+      )
+    } else if (v === CROSS) {
+      const r = cell * 0.24
+      items.push(
+        `<line class="lp-cross" x1="${(c.x - r).toFixed(2)}" y1="${(c.y - r).toFixed(2)}" x2="${(c.x + r).toFixed(2)}" y2="${(c.y + r).toFixed(2)}" />`,
+      )
+      items.push(
+        `<line class="lp-cross" x1="${(c.x + r).toFixed(2)}" y1="${(c.y - r).toFixed(2)}" x2="${(c.x - r).toFixed(2)}" y2="${(c.y + r).toFixed(2)}" />`,
       )
     }
     const cls = bad.has(i) ? 'lp-cell bad' : 'lp-cell'

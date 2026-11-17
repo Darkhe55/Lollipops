@@ -252,6 +252,10 @@ export interface GameAdapter {
   cycleValue(state: GameState, target: HitTarget): number
   /** 右键直接写入的值（默认语义 = 打叉/排除，各游戏可覆盖） */
   rightClickValue(state: GameState, target: HitTarget): number
+  /** 拖拽时按首次转换类型锁定本次拖动可影响的类型（棒棒糖右键标叉/清除） */
+  strokeMode?: 'cycle' | 'transition'
+  /** 右键是否支持起笔拖动 */
+  rightStroke?: boolean
   applyMove(state: GameState, move: Move): void
   invertMove(move: Move): Move
   /** 读取某索引当前值（state 内部数组的取值入口） */

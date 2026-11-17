@@ -29,9 +29,10 @@ import {
 } from './engine.ts'
 import { countTypeSolutions, findTypeSolution, hasSolution } from './solver.ts'
 import {
-  BLACK,
+  CROSS,
   EMPTY,
   T_EMPTY,
+  WHITE,
   T_HEAD,
   asLollipopPuzzle,
   asLollipopState,
@@ -148,7 +149,7 @@ export function deduceTypes(
 function hasPlayerSymbols(s: LollipopState): boolean {
   for (let i = 0; i < s.cells.length; i++) {
     const v = s.cells[i] ?? EMPTY
-    if (v === EMPTY) continue
+    if (v === EMPTY || v === CROSS) continue
     if ((s.givens[i] ?? EMPTY) === EMPTY) return true
   }
   return false
@@ -176,14 +177,9 @@ export function planLogicSolve(puzzle: Puzzle, initialState: GameState): LogicPl
   let lastRule = -1
   let streak = 0
 
-  const solveValueAt = (index: number, type: number): number => {
+  const solveValueAt = (_index: number, type: number): number => {
     if (type === T_HEAD) {
-      const given = p.givens[index] ?? EMPTY
-      if (given === 1 || given === 2) return given
-      // 保留玩家已经放好的同类圆头颜色
-      const cur = display[index] ?? EMPTY
-      if (typeOf(cur) === T_HEAD) return cur
-      return BLACK
+      return WHITE
     }
     return valueOfType(type)
   }

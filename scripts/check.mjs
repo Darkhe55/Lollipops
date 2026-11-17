@@ -155,7 +155,7 @@ for (const puzzle of puzzles) {
 // ⑦ 自定义题板编解码与状态
 {
   const grid = [
-    null, 1, null, null, null,
+    null, 2, null, null, null,
     null, 3, null, null, null,
     null, null, null, null, null,
     null, null, 2, null, null,

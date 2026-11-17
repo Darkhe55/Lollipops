@@ -15,7 +15,6 @@
 import type { Difficulty } from '../core/types'
 import { countTypeSolutions } from './solver.ts'
 import {
-  BLACK,
   EMPTY,
   HSTICK,
   T_EMPTY,
@@ -164,10 +163,11 @@ function buildSolution(w: number, h: number, rng: () => number, attempts: number
 }
 
 function colorize(types: Int8Array, rng: () => number): number[] {
+  void rng
   const values = new Array<number>(types.length).fill(EMPTY)
   for (let i = 0; i < types.length; i++) {
     const t = types[i]!
-    if (t === T_HEAD) values[i] = rng() < 0.5 ? BLACK : WHITE
+    if (t === T_HEAD) values[i] = WHITE
     else if (t === T_H) values[i] = HSTICK
     else if (t === T_V) values[i] = VSTICK
   }

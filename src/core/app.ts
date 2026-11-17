@@ -352,35 +352,59 @@ export function createApp(root: HTMLElement, adapter: GameAdapter) {
 
   function bindBoardEvents(): void {
     const board = $('#board')
-    const svg = board.querySelector<SVGSVGElement>('svg.board-svg')
-    if (!svg) return
+    const initialSvg = board.querySelector<SVGSVGElement>('svg.board-svg')
+    if (!initialSvg) return
 
-    view.apply(svg)
+    view.apply(initialSvg)
 
-    svg.addEventListener('contextmenu', (e) => {
-      e.preventDefault()
-    })
+    // 事件只绑定一次到持久存在的 #board 上；refresh() 会替换内部 SVG。
+    if (board.dataset.interactionBound === '1') return
+    board.dataset.interactionBound = '1'
 
-    let dragging = false
+    let mode: 'idle' | 'drag' | 'pan' = 'idle'
     let dragMoved = false
     let lastClient = { x: 0, y: 0 }
-    let pending: { index: number } | null = null
-    let painting: { kind: 'cycle' | 'force'; to: number } | null = null
+    let painting: { from: number; to: number } | null = null
     let painted = new Set<number>()
+    let cleanupGesture: (() => void) | null = null
 
-    const hitAt = (e: PointerEvent) => {
+    const currentSvg = (): SVGSVGElement | null => board.querySelector<SVGSVGElement>('svg.board-svg')
+
+    const hitAt = (e: { clientX: number; clientY: number }) => {
       if (!session) return null
+      const svg = currentSvg()
+      if (!svg) return null
       const vb = clientToViewBox(svg, e.clientX, e.clientY)
       if (!vb) return null
       const m = adapter.metricsFor(session.puzzle)
       return adapter.hitTest(m, session.puzzle, vb.x, vb.y)
     }
 
-    svg.addEventListener(
+    const applyAt = (hit: { index: number }, first: boolean): void => {
+      if (!session || !painting) return
+      const from = adapter.valueAt(session.state, hit.index)
+      let to: number | null
+      if (first) {
+        to = painting.to
+      } else if (adapter.strokeMode === 'transition') {
+        to = from === painting.from ? painting.to : null
+      } else {
+        to = adapter.cycleValue(session.state, hit)
+      }
+      if (to === null || from === to) return
+      pushMove({ index: hit.index, from, to })
+      refresh()
+    }
+
+    board.addEventListener(
       'wheel',
       (e) => {
+        const target = e.target as Element | null
+        if (!target?.closest('svg.board-svg')) return
         e.preventDefault()
         e.stopPropagation()
+        const svg = currentSvg()
+        if (!svg) return
         const vb = clientToViewBox(svg, e.clientX, e.clientY)
         const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12
         view.setZoom(view.zoom * factor, vb ?? undefined)
@@ -388,26 +412,25 @@ export function createApp(root: HTMLElement, adapter: GameAdapter) {
       { passive: false },
     )
 
-    svg.addEventListener('pointerdown', (e) => {
+    board.addEventListener('pointerdown', (e) => {
+      const target = e.target as Element | null
+      if (!target?.closest('svg.board-svg')) return
+      if (mode !== 'idle') return
       resumeAudio()
+
       if (e.button === 1) {
-        // 中键拖动平移（滚轮缩放后也可用）
         e.preventDefault()
-        dragging = true
-        dragMoved = true
-        painting = null
-        pending = null
+        mode = 'pan'
         lastClient = { x: e.clientX, y: e.clientY }
-        svg.setPointerCapture(e.pointerId)
-        return
-      }
-      if (e.button === 2) {
-        const hit = hitAt(e)
-        if (hit) {
-          if (!session) return
+      } else {
+        if (!session) return
+        if (e.button === 2) e.preventDefault()
+        if (e.button === 2 && !adapter.rightStroke) {
+          const hit = hitAt(e)
+          if (!hit) return
           if (adapter.keyboard) adapter.keyboard.setCursor(session.state, hit.index)
-          const to = adapter.rightClickValue(session.state, hit)
           const from = adapter.valueAt(session.state, hit.index)
+          const to = adapter.rightClickValue(session.state, hit)
           if (from !== to) {
             pushMove({ index: hit.index, from, to })
             refresh()
@@ -415,88 +438,85 @@ export function createApp(root: HTMLElement, adapter: GameAdapter) {
             saveState()
             renderBoardOnly()
           }
+          return
         }
-        return
-      }
-      if (e.button !== 0) return
+        if (e.button !== 0 && e.button !== 2) return
 
-      lastClient = { x: e.clientX, y: e.clientY }
-      dragging = true
-      dragMoved = false
-      painted = new Set()
-      const hit = hitAt(e)
-      if (hit) {
-        if (!session) return
-        // 鼠标点选同时移动键盘光标
-        if (adapter.keyboard) adapter.keyboard.setCursor(session.state, hit.index)
-        const from = adapter.valueAt(session.state, hit.index)
-        const to = adapter.cycleValue(session.state, hit)
-        painting = from === to ? null : { kind: 'cycle', to }
-        pending = hit
-      } else {
-        painting = null
-        pending = null
-      }
-      svg.setPointerCapture(e.pointerId)
-    })
-
-    svg.addEventListener('pointermove', (e) => {
-      if (!dragging) return
-      const dx = e.clientX - lastClient.x
-      const dy = e.clientY - lastClient.y
-      if (!dragMoved && Math.hypot(dx, dy) < 6) return
-      dragMoved = true
-      if (painting) {
-        // 拖拽涂写：沿途命中即落子
         const hit = hitAt(e)
-        if (hit && !painted.has(hit.index)) {
-          if (!session) return
-          painted.add(hit.index)
+        mode = 'drag'
+        dragMoved = false
+        painted = new Set()
+        painting = null
+        lastClient = { x: e.clientX, y: e.clientY }
+        if (hit) {
+          if (adapter.keyboard) adapter.keyboard.setCursor(session.state, hit.index)
           const from = adapter.valueAt(session.state, hit.index)
           const to =
-            painting.kind === 'force' ? painting.to : adapter.cycleValue(session.state, hit)
+            e.button === 2
+              ? adapter.rightClickValue(session.state, hit)
+              : adapter.cycleValue(session.state, hit)
           if (from !== to) {
-            pushMove({ index: hit.index, from, to })
-            refresh()
+            painting = { from, to }
+            painted.add(hit.index)
+            applyAt(hit, true)
           }
         }
-        return
       }
-      // 平移
-      const rect = svg.getBoundingClientRect()
-      view.panBy(dx, dy, svg, rect.width, rect.height)
-      lastClient = { x: e.clientX, y: e.clientY }
-    })
 
-    const endDrag = (e: PointerEvent) => {
-      if (!dragging) return
-      dragging = false
-      try {
-        svg.releasePointerCapture(e.pointerId)
-      } catch {
-        /* ignore */
-      }
-      let rendered = false
-      if (!dragMoved && pending && painting) {
-        if (!session) return
-        const from = adapter.valueAt(session.state, pending.index)
-        const to = painting.to
-        if (from !== to) {
-          pushMove({ index: pending.index, from, to })
-          refresh()
-          rendered = true
+      const onMove = (ev: PointerEvent) => {
+        if (mode === 'pan') {
+          const svg = currentSvg()
+          if (!svg) return
+          const dx = ev.clientX - lastClient.x
+          const dy = ev.clientY - lastClient.y
+          const rect = svg.getBoundingClientRect()
+          view.panBy(dx, dy, svg, rect.width, rect.height)
+          lastClient = { x: ev.clientX, y: ev.clientY }
+          return
         }
+        if (mode !== 'drag') return
+        const dx = ev.clientX - lastClient.x
+        const dy = ev.clientY - lastClient.y
+        if (!dragMoved && Math.hypot(dx, dy) < 6) return
+        dragMoved = true
+        if (painting) {
+          // 沿指针路径采样，避免快速拖动跳过中间格子
+          const from = { x: lastClient.x, y: lastClient.y }
+          const to = { x: ev.clientX, y: ev.clientY }
+          const dist = Math.hypot(to.x - from.x, to.y - from.y)
+          const steps = Math.max(1, Math.min(64, Math.ceil(dist / 8)))
+          for (let step = 1; step <= steps; step++) {
+            const k = step / steps
+            const hit = hitAt({ clientX: from.x + (to.x - from.x) * k, clientY: from.y + (to.y - from.y) * k })
+            if (hit && !painted.has(hit.index)) {
+              painted.add(hit.index)
+              if (session && adapter.keyboard) adapter.keyboard.setCursor(session.state, hit.index)
+              applyAt(hit, false)
+            }
+          }
+          lastClient = { x: ev.clientX, y: ev.clientY }
+          return
+        }
+        const svg = currentSvg()
+        if (!svg) return
+        const rect = svg.getBoundingClientRect()
+        view.panBy(dx, dy, svg, rect.width, rect.height)
+        lastClient = { x: ev.clientX, y: ev.clientY }
       }
-      // 单击（或点到题面锁定格）时也刷新光标显示
-      if (!rendered && !dragMoved && pending && adapter.keyboard) {
-        saveState()
-        renderBoardOnly()
+
+      const onUp = () => cleanupGesture?.()
+      cleanupGesture = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
+        cleanupGesture = null
+        mode = 'idle'
+        painting = null
       }
-      pending = null
-      painting = null
-    }
-    svg.addEventListener('pointerup', endDrag)
-    svg.addEventListener('pointercancel', endDrag)
+      window.addEventListener('pointermove', onMove, { passive: false })
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
+    })
   }
 
   /* ———————————————————— 撤销 / 重做 / 清空 ———————————————————— */

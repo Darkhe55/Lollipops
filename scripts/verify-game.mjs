@@ -144,9 +144,8 @@ ok('第一格不是预填格', before.givens[0] === 0)
 await page.keyboard.press(' ')
 await sleep(120)
 let info = await sessionInfo()
-ok('空格：空格子 → 黑圆头', info.cells[0] === 1, `cell0=${info.cells[0]}`)
+ok('空格：空格子 → 白圆头', info.cells[0] === 2, `cell0=${info.cells[0]}`)
 
-await page.keyboard.press(' ')
 await page.keyboard.press(' ')
 await sleep(120)
 info = await sessionInfo()
@@ -161,18 +160,18 @@ await page.keyboard.press('ArrowRight')
 await sleep(100)
 info = await sessionInfo()
 ok('方向键右移光标', info.cursor === 1, `cursor=${info.cursor}`)
-await page.keyboard.press('4')
+await page.keyboard.press('3')
 await sleep(120)
 info = await sessionInfo()
-ok('数字键 4 直接放竖棍', info.cells[1] === 4, `cell1=${info.cells[1]}`)
+ok('数字键 3 直接放竖棍', info.cells[1] === 4, `cell1=${info.cells[1]}`)
 await page.keyboard.press('ArrowDown')
 await sleep(100)
 info = await sessionInfo()
 ok('方向键下移光标', info.cursor === 6, `cursor=${info.cursor}`)
-await page.keyboard.press('2')
+await page.keyboard.press('1')
 await sleep(120)
 info = await sessionInfo()
-ok('数字键 2 直接放白圆头', info.cells[6] === 2, `cell6=${info.cells[6]}`)
+ok('数字键 1 直接放白圆头', info.cells[6] === 2, `cell6=${info.cells[6]}`)
 await page.screenshot({ path: `${SHOT_DIR}/02-keyboard.png`, fullPage: true })
 
 // 撤销 / 重做：撤到历史为空为止
@@ -191,7 +190,7 @@ ok(
 await page.click('#btn-redo')
 await sleep(120)
 info = await sessionInfo()
-ok('重做恢复一步', info.cells[0] === 1, `cell0=${info.cells[0]}`)
+ok('重做恢复一步', info.cells[0] === 2, `cell0=${info.cells[0]}`)
 await page.click('#btn-clear')
 await sleep(120)
 
@@ -202,11 +201,11 @@ let pt = await cellPoint(mouseCell)
 await page.mouse.click(pt.x, pt.y)
 await sleep(120)
 info = await sessionInfo()
-ok('鼠标左键循环标记', info.cells[mouseCell] === 1, `cell${mouseCell}=${info.cells[mouseCell]}`)
+ok('鼠标左键循环标记', info.cells[mouseCell] === 2, `cell${mouseCell}=${info.cells[mouseCell]}`)
 await page.mouse.click(pt.x, pt.y)
 await sleep(120)
 info = await sessionInfo()
-ok('再次点击继续循环', info.cells[mouseCell] === 2, `cell${mouseCell}=${info.cells[mouseCell]}`)
+ok('再次点击继续循环', info.cells[mouseCell] === 3, `cell${mouseCell}=${info.cells[mouseCell]}`)
 await page.mouse.click(pt.x, pt.y, { button: 'right' })
 await sleep(120)
 info = await sessionInfo()
@@ -266,25 +265,25 @@ await page.fill('#custom-h', '5')
 await page.click('#custom-regen')
 await sleep(150)
 
-// 依次放置：黑圆头、白圆头、横棍、竖棍
+// 依次放置：白圆头、横棍、白圆头、竖棍
 const place = async (index, clicks) => {
   for (let k = 0; k < clicks; k++) {
     await page.locator(`.custom-cell[data-i="${index}"]`).click()
     await sleep(30)
   }
 }
-await place(0, 1) // 黑圆头
-await place(1, 3) // 横棍（与 (0,0) 圆头横向配对）
-await place(8, 2) // 白圆头
-await place(14, 4) // 竖棍（与 (1,2) 圆头纵向配对）
+await place(0, 1) // 白圆头
+await place(1, 2) // 横棍（与 (0,0) 圆头横向配对）
+await place(8, 1) // 白圆头
+await place(14, 3) // 竖棍（与 (1,2) 圆头纵向配对）
 await page.screenshot({ path: `${SHOT_DIR}/05-custom-editor.png`, fullPage: true })
 
 const customCells = await page.evaluate(() =>
   Array.from(document.querySelectorAll('.custom-cell')).map((el) => el.textContent),
 )
 ok(
-  '自定义题板可放置四种符号',
-  customCells[0] === '●' && customCells[1] === '━' && customCells[8] === '○' && customCells[14] === '┃',
+  '自定义题板可放置白圆/横棍/竖棍',
+  customCells[0] === '○' && customCells[1] === '━' && customCells[8] === '○' && customCells[14] === '┃',
   JSON.stringify([customCells[0], customCells[1], customCells[8], customCells[14]]),
 )
 
@@ -294,7 +293,7 @@ info = await sessionInfo()
 ok('载入自定义题板', info.difficulty === 'custom' && info.width === 6 && info.height === 5, `${info.width}×${info.height}`)
 ok(
   '自定义题板 givens 正确带入',
-  info.givens[0] === 1 && info.givens[1] === 3 && info.givens[8] === 2 && info.givens[14] === 4,
+  info.givens[0] === 2 && info.givens[1] === 3 && info.givens[8] === 2 && info.givens[14] === 4,
   JSON.stringify(info.givens.filter((v) => v !== 0)),
 )
 const customId = info.id
@@ -324,10 +323,10 @@ const restored = await page.evaluate(() =>
 )
 ok(
   '编辑时题面还原到编辑器',
-  restored[0] === '●' && restored[1] === '━' && restored[8] === '○' && restored[14] === '┃',
+  restored[0] === '○' && restored[1] === '━' && restored[8] === '○' && restored[14] === '┃',
   JSON.stringify([restored[0], restored[1], restored[8], restored[14]]),
 )
-await place(2, 2) // 追加一个白圆头
+await place(2, 1) // 追加一个白圆头
 await page.click('#custom-save')
 await sleep(700)
 const libraryAfterEdit = readLibrary()

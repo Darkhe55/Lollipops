@@ -13,13 +13,14 @@
  *
  * 盘面每格只记录一个符号：
  *   0 = 空（既表示空格，也是模板约定的 Unknown）
- *   1 = 黑圆头
+ *   1 = 旧版黑圆头（仅兼容旧题库/旧存档，解码后统一成白圆头）
  *   2 = 白圆头
  *   3 = 横棍（─）
  *   4 = 竖棍（│）
+ *   5 = 红叉（玩家标记的“确认空地”，不属于题面符号）
  *
- * 规则层面 BLACK 与 WHITE 是同一个符号类型（「圆头」）；
- * 颜色只用于题面展示，不影响唯一性与判定（README 有说明）。
+ * 现在游戏只使用白圆头；旧数据里的 1 会在 decodeBoard 时归一成 WHITE。
+ * 校验/唯一性只看「圆头 / 横棍 / 竖棍 / 空」，红叉不参与配对。
  *
  * 内部推理/求解使用「类型层」编码（CellType）：
  *   -1 = 未知，0 = 空，1 = 圆头，2 = 横棍，3 = 竖棍
@@ -30,13 +31,16 @@ import type { GameState, Puzzle, ValidationResult } from '../core/types'
 /* ────────────────────────── 盘面值 ────────────────────────── */
 
 export const EMPTY = 0
+/** 旧版黑圆头值：只用于读取旧题库/旧存档，游戏内不再产生 */
 export const BLACK = 1
 export const WHITE = 2
 export const HSTICK = 3
 export const VSTICK = 4
+/** 红叉：玩家标记的确认空地，不参与棒棒糖配对 */
+export const CROSS = 5
 
-/** 所有可放置符号（不含空） */
-export const SYMBOLS: number[] = [BLACK, WHITE, HSTICK, VSTICK]
+/** 所有可放置符号（不含空与红叉） */
+export const SYMBOLS: number[] = [WHITE, HSTICK, VSTICK]
 
 /** 类型层常量 */
 export const T_EMPTY = 0
@@ -56,9 +60,9 @@ export function typeOf(value: number): number {
   return T_EMPTY
 }
 
-/** 符号类型 → 默认盘面值（用于逻辑解题回填；圆头默认黑） */
+/** 符号类型 → 默认盘面值（用于逻辑解题回填；圆头统一为白） */
 export function valueOfType(type: number): number {
-  if (type === T_HEAD) return BLACK
+  if (type === T_HEAD) return WHITE
   if (type === T_H) return HSTICK
   if (type === T_V) return VSTICK
   return EMPTY
@@ -194,8 +198,9 @@ export function canPair(typeA: number, typeB: number, dir: number): boolean {
 export function encodeBoard(cells: ArrayLike<number>): string {
   let out = ''
   for (let i = 0; i < cells.length; i++) {
-    const v = cells[i]! | 0
-    out += v >= 0 && v <= 4 ? String(v) : '0'
+    const raw = cells[i]! | 0
+    const v = raw === BLACK ? WHITE : raw
+    out += v >= 0 && v <= CROSS ? String(v) : '0'
   }
   return out
 }
@@ -205,8 +210,8 @@ export function decodeBoard(text: unknown, expected: number): number[] | null {
   const out = new Array<number>(expected).fill(EMPTY)
   for (let i = 0; i < expected; i++) {
     const c = text.charCodeAt(i) - 48
-    if (c < 0 || c > 4) return null
-    out[i] = c
+    if (c < 0 || c > CROSS) return null
+    out[i] = c === BLACK ? WHITE : c
   }
   return out
 }
@@ -229,15 +234,14 @@ export function typesFromGivens(givens: ArrayLike<number>): Int8Array {
 }
 
 /**
- * 把类型层解还原成盘面值：
- *   优先沿用题面给定的圆头颜色，其它圆头默认黑色。
+ * 把类型层解还原成盘面值：圆头统一为白圆头。
  */
 export function valuesFromTypes(types: ArrayLike<number>, givens?: ArrayLike<number>): number[] {
+  void givens
   const out = new Array<number>(types.length).fill(EMPTY)
   for (let i = 0; i < types.length; i++) {
     const t = types[i]!
-    const given = givens?.[i] ?? EMPTY
-    if (t === T_HEAD) out[i] = given === WHITE ? WHITE : BLACK
+    if (t === T_HEAD) out[i] = WHITE
     else if (t === T_H) out[i] = HSTICK
     else if (t === T_V) out[i] = VSTICK
     else out[i] = EMPTY

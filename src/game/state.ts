@@ -5,6 +5,7 @@
 import type { GameState, HitTarget, KeyboardSupport, Move, Puzzle } from '../core/types'
 import {
   BLACK,
+  CROSS,
   EMPTY,
   HSTICK,
   VSTICK,
@@ -17,10 +18,10 @@ import {
   type LollipopState,
 } from './types.ts'
 
-const CYCLE = [EMPTY, BLACK, WHITE, HSTICK, VSTICK]
+const CYCLE = [EMPTY, WHITE, HSTICK, VSTICK]
 
 function isSymbol(v: number): boolean {
-  return v === BLACK || v === WHITE || v === HSTICK || v === VSTICK
+  return v === WHITE || v === HSTICK || v === VSTICK
 }
 
 export function createEmptyState(puzzle: Puzzle): LollipopState {
@@ -29,7 +30,7 @@ export function createEmptyState(puzzle: Puzzle): LollipopState {
   const givens = new Array<number>(size).fill(EMPTY)
   for (let i = 0; i < size; i++) {
     const v = p.givens?.[i] ?? EMPTY
-    givens[i] = isSymbol(v) ? v : EMPTY
+    givens[i] = v === BLACK ? WHITE : isSymbol(v) ? v : EMPTY
   }
   return {
     puzzleId: p.id,
@@ -53,7 +54,7 @@ export function cloneState(state: GameState): LollipopState {
   }
 }
 
-/** 左键循环：空 → 黑圆头 → 白圆头 → 横棍 → 竖棍 → 空 */
+/** 左键循环：空 → 白圆头 → 横棍 → 竖棍 → 空 */
 export function cycleValue(state: GameState, target: HitTarget): number {
   const s = asLollipopState(state)
   const given = s.givens[target.index] ?? EMPTY
@@ -63,12 +64,12 @@ export function cycleValue(state: GameState, target: HitTarget): number {
   return CYCLE[(pos + 1) % CYCLE.length] ?? EMPTY
 }
 
-/** 右键：清除（题面给定格不动） */
+/** 右键：空格 → 红叉；已有内容/红叉 → 清空（题面给定格不动） */
 export function rightClickValue(state: GameState, target: HitTarget): number {
   const s = asLollipopState(state)
   const given = s.givens[target.index] ?? EMPTY
   if (isSymbol(given)) return given
-  return EMPTY
+  return (s.cells[target.index] ?? EMPTY) === EMPTY ? CROSS : EMPTY
 }
 
 export function applyMove(state: GameState, move: Move): void {
@@ -80,7 +81,7 @@ export function applyMove(state: GameState, move: Move): void {
     return
   }
   const v = Math.floor(move.to)
-  s.cells[move.index] = v >= EMPTY && v <= VSTICK ? v : EMPTY
+  s.cells[move.index] = v === CROSS ? CROSS : v >= EMPTY && v <= VSTICK ? (v === BLACK ? WHITE : v) : EMPTY
 }
 
 export function invertMove(move: Move): Move {
@@ -203,7 +204,7 @@ export function moveCursor(
 
 /**
  * 键盘直接落子：
- *   空格 = 循环切换；1 / 2 / 3 / 4 = 黑圆头 / 白圆头 / 横棍 / 竖棍；
+ *   空格 = 循环切换；1 / 2 / 3 = 白圆头 / 横棍 / 竖棍；
  *   Backspace / Delete = 清除。
  * 返回 null 表示不处理（交给全局快捷键）。
  */
@@ -220,11 +221,10 @@ export function keyboardInput(
   const from = s.cells[index] ?? EMPTY
   let to = from
   if (key === ' ') to = cycleValue(state, { index })
-  else if (key === '1') to = BLACK
-  else if (key === '2') to = WHITE
-  else if (key === '3') to = HSTICK
-  else if (key === '4') to = VSTICK
-  else if (key === 'Backspace' || key === 'Delete') to = EMPTY
+  else if (key === '1') to = WHITE
+  else if (key === '2') to = HSTICK
+  else if (key === '3') to = VSTICK
+  else if (key === 'Backspace' || key === 'Delete' || key === '0') to = EMPTY
   else return null
   if (to === from) return null
   return { index, from, to }

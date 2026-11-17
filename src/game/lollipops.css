@@ -39,7 +39,16 @@
 
 /* —— 棒棒糖底衬（把一对格子连起来，糖果棍的暖色） —— */
 .lp-board .lp-candy {
-  stroke: var(--lp-candy-soft);
+  stroke: #d48232;
+  stroke-linecap: butt;
+  opacity: 1;
+  pointer-events: none;
+}
+
+/* —— 红叉：玩家标记的确认空地 —— */
+.lp-board .lp-cross {
+  stroke: #d43a2f;
+  stroke-width: 4;
   stroke-linecap: round;
   pointer-events: none;
 }
