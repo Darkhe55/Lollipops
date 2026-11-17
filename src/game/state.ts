@@ -60,16 +60,20 @@ export function cycleValue(state: GameState, target: HitTarget): number {
   const given = s.givens[target.index] ?? EMPTY
   if (isSymbol(given)) return given
   const cur = s.cells[target.index] ?? EMPTY
+  // 负面标记（红叉）→ 正面1；正面循环：空 → 正面1 → 正面2 → …
+  if (cur === CROSS) return WHITE
   const pos = CYCLE.indexOf(cur)
   return CYCLE[(pos + 1) % CYCLE.length] ?? EMPTY
 }
 
-/** 右键：空格 → 红叉；已有内容/红叉 → 清空（题面给定格不动） */
+/** 右键：空格/正面 → 红叉；红叉 → 空（题面给定格不动） */
 export function rightClickValue(state: GameState, target: HitTarget): number {
   const s = asLollipopState(state)
   const given = s.givens[target.index] ?? EMPTY
   if (isSymbol(given)) return given
-  return (s.cells[target.index] ?? EMPTY) === EMPTY ? CROSS : EMPTY
+  const cur = s.cells[target.index] ?? EMPTY
+  if (cur === CROSS) return EMPTY
+  return CROSS
 }
 
 export function applyMove(state: GameState, move: Move): void {

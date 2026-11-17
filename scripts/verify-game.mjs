@@ -209,7 +209,11 @@ ok('再次点击继续循环', info.cells[mouseCell] === 3, `cell${mouseCell}=${
 await page.mouse.click(pt.x, pt.y, { button: 'right' })
 await sleep(120)
 info = await sessionInfo()
-ok('鼠标右键清除', info.cells[mouseCell] === 0, `cell${mouseCell}=${info.cells[mouseCell]}`)
+ok('鼠标右键把正面标记改为红叉', info.cells[mouseCell] === 5, `cell${mouseCell}=${info.cells[mouseCell]}`)
+await page.mouse.click(pt.x, pt.y, { button: 'right' })
+await sleep(120)
+info = await sessionInfo()
+ok('鼠标右键把红叉清空', info.cells[mouseCell] === 0, `cell${mouseCell}=${info.cells[mouseCell]}`)
 await page.screenshot({ path: `${SHOT_DIR}/03-mouse.png`, fullPage: true })
 
 /* ────────────────────────── 4. 逻辑解题 ────────────────────────── */
