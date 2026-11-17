@@ -361,6 +361,15 @@ export function createApp(root: HTMLElement, adapter: GameAdapter) {
     if (board.dataset.interactionBound === '1') return
     board.dataset.interactionBound = '1'
 
+    // 右键用于标红叉/清除，禁止浏览器右键菜单
+    board.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+    })
+    document.addEventListener('contextmenu', (e) => {
+      if ((e.target as Element | null)?.closest('svg.board-svg')) e.preventDefault()
+    })
+
     let mode: 'idle' | 'drag' | 'pan' = 'idle'
     let dragMoved = false
     let lastClient = { x: 0, y: 0 }
