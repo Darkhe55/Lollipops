@@ -10,7 +10,9 @@
  *   R2 相邻排除：棒棒糖之外、与该棒棒糖相邻的格子必须留空；
  *                一个格子若接触 2 个符号格，必然留空；
  *                朝向不兼容的相邻格也必然留空；
- *   R3 视线阻挡：同一行/列里相邻（忽略空格）的两个符号类型不能相同。
+ *   R3 视线阻挡：同一行/列里相邻（忽略空格）的两个符号类型不能相同；
+ *   R6 2×2 局部：一个 2×2 最多两个符号；相邻两符号必须配对；对角两符号的另外两格必须为空；
+ *      一个符号若没有任何可配对方向（圆头/横棍/竖棍的轴向都不行）→ 矛盾。
  *
  * 求解器与逻辑解题回放共用本文件。
  */
@@ -33,6 +35,7 @@ export const RULE_ADJ = 2
 export const RULE_SIGHT = 3
 export const RULE_PROBE = 4
 export const RULE_FALLBACK = 5
+export const RULE_LOCAL = 6
 
 export const RULE_LABELS: Record<number, string> = {
   1: '唯一搭档：这个符号只剩一个可配对的相邻格',
@@ -40,6 +43,7 @@ export const RULE_LABELS: Record<number, string> = {
   3: '视线阻挡：同排同列的同类符号之间必须隔一个不同符号',
   4: '反证：假定该格为其它符号都会导致矛盾',
   5: '回溯补完：剩下的格子由求解结果确定',
+  6: '2×2 局部：相邻符号必须配对、对角符号两侧留空、三符号必矛盾',
 }
 
 export interface Deduction {
@@ -97,20 +101,20 @@ export function assign(est: EngineState, index: number, type: number, rule: numb
   return true
 }
 
-function forceEmpty(est: EngineState, index: number): boolean {
+function forceEmpty(est: EngineState, index: number, rule = RULE_ADJ): boolean {
   const cur = est.val[index]!
   if (cur === T_EMPTY) return true
   if (cur !== -1) return false
-  return assign(est, index, T_EMPTY, RULE_ADJ)
+  return assign(est, index, T_EMPTY, rule)
 }
 
-function pair(est: EngineState, i: number, j: number, dir: number): boolean {
+function pair(est: EngineState, i: number, j: number, dir: number, rule = RULE_PAIR): boolean {
   const need = partnerTypeOf(est.val[i]!, dir)
   if (need < 0) return false
   if (est.partner[i]! >= 0 || est.partner[j]! >= 0) return false
   const cur = est.val[j]!
   if (cur === -1) {
-    if (!assign(est, j, need, RULE_PAIR)) return false
+    if (!assign(est, j, need, rule)) return false
   } else if (cur !== need) {
     return false
   }
@@ -118,16 +122,49 @@ function pair(est: EngineState, i: number, j: number, dir: number): boolean {
   est.partner[j] = i
   for (const { j: k } of est.geo.neighbors[i]!) {
     if (k === j) continue
-    if (!forceEmpty(est, k)) return false
+    if (!forceEmpty(est, k, rule)) return false
   }
   for (const { j: k } of est.geo.neighbors[j]!) {
     if (k === i) continue
-    if (!forceEmpty(est, k)) return false
+    if (!forceEmpty(est, k, rule)) return false
   }
   return true
 }
 
 /* ────────────────────────── 单轮传播 ────────────────────────── */
+
+function passLocal(est: EngineState): boolean {
+  const { geo, val, partner } = est
+  const { w, h } = geo
+  for (let y = 0; y + 1 < h; y++) {
+    for (let x = 0; x + 1 < w; x++) {
+      const cells = [y * w + x, y * w + x + 1, (y + 1) * w + x, (y + 1) * w + x + 1]
+      const symbols = cells.filter((i) => val[i]! > 0)
+      if (symbols.length >= 3) return false
+      if (symbols.length !== 2) continue
+      const [a, b] = symbols
+      const row = Math.floor(a! / w)
+      const col = a! % w
+      const rowB = Math.floor(b! / w)
+      const colB = b! % w
+      const adjacent = Math.abs(row - rowB) + Math.abs(col - colB) === 1
+      if (adjacent) {
+        if (partner[a!] === b && partner[b!] === a) continue
+        if (partner[a!]! >= 0 || partner[b!]! >= 0) return false
+        const dir = row === rowB ? 0 : 1
+        if (!pair(est, a!, b!, dir, RULE_LOCAL)) return false
+      } else {
+        // 两个符号在 2×2 里对角：另外两格必须为空，否则会变成 3 个符号
+        for (const i of cells) {
+          if (i === a || i === b) continue
+          if (val[i]! > 0) return false
+          if (!forceEmpty(est, i, RULE_LOCAL)) return false
+        }
+      }
+    }
+  }
+  return true
+}
 
 function passPairing(est: EngineState): boolean {
   const { geo, val, partner } = est
@@ -168,6 +205,9 @@ function passPairing(est: EngineState): boolean {
       if (!pair(est, i, assignedCand, assignedDir)) return false
     } else if (undecidedCount === 1) {
       if (!pair(est, i, undecidedCand, undecidedDir)) return false
+    } else if (assignedCount === 0 && undecidedCount === 0) {
+      // 没有任何可配对方向：圆头/棍子无法归入棒棒糖
+      return false
     }
   }
   return true
@@ -228,6 +268,7 @@ function passSight(est: EngineState): boolean {
 }
 
 function propagateOnce(est: EngineState): boolean {
+  if (!passLocal(est)) return false
   if (!passPairing(est)) return false
   if (!passEmptyForcing(est)) return false
   if (!passSight(est)) return false
