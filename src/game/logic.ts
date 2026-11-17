@@ -187,8 +187,14 @@ export function planLogicSolve(puzzle: Puzzle, initialState: GameState): LogicPl
   const emit = (index: number, type: number, rule: number, label: string): void => {
     const cur = display[index] ?? EMPTY
     const curType = typeOf(cur)
-    if (curType === type) return
-    const to = solveValueAt(index, type)
+    // 回放里的“排除”要显示成红叉：未知空格初始值也是 EMPTY，不能当作已确定空。
+    if (type === T_EMPTY) {
+      if (cur === CROSS) return
+      if (curType !== T_EMPTY) return
+    } else if (curType === type) {
+      return
+    }
+    const to = type === T_EMPTY ? CROSS : solveValueAt(index, type)
     if (to === cur) return
     if (rule === lastRule) streak++
     else {
